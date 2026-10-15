@@ -1,8 +1,12 @@
 """Flextail Max Pump 3 -> Lost Horizon mattress adaptor.
 
-Remix of MakerWorld 2165161 "IKEA vacuum bag adapter for Flextail Max Pump 3":
-keeps its pump-side socket and replaces the IKEA nozzle with a replica of the
-original Lost Horizon pump nozzle (see original-*.jpeg).
+Remix of MakerWorld 2165161 "IKEA vacuum bag adapter for Flextail Max Pump 3"
+(https://makerworld.com/en/models/2165161): keeps its pump-side socket and
+replaces the IKEA nozzle with a replica of the original Lost Horizon pump
+nozzle (see original-*.jpeg).
+
+The original model is not redistributed here. To overlay it for comparison,
+download its STL into source/; the reference import is skipped otherwise.
 
 Run inside Blender (via the Blender MCP or `blender -P build_adaptor.py`).
 All dimensions in mm; 1 Blender unit = 1 mm.
@@ -73,9 +77,14 @@ def setup_scene():
 
 
 def import_reference():
+    old = bpy.data.collections.get("Reference")
+    if old:
+        for obj in list(old.objects):
+            bpy.data.objects.remove(obj, do_unlink=True)
+        bpy.data.collections.remove(old)
+    if not os.path.exists(REFERENCE_STL):
+        return None
     coll = collection("Reference", hide=True)
-    for obj in list(coll.objects):
-        bpy.data.objects.remove(obj, do_unlink=True)
     bpy.ops.wm.stl_import(filepath=REFERENCE_STL)
     ref = bpy.context.selected_objects[0]
     ref.name = "Reference_IKEA_Adapter"

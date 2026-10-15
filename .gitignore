@@ -1,0 +1,5 @@
+# Original MakerWorld model, downloaded locally for reference only
+source/
+
+# Blender backups
+*.blend1
