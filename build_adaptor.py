@@ -79,6 +79,8 @@ def import_reference():
     bpy.ops.wm.stl_import(filepath=REFERENCE_STL)
     ref = bpy.context.selected_objects[0]
     ref.name = "Reference_IKEA_Adapter"
+    # Deselect now: once hidden, select_all() can't reach it and it would be exported.
+    ref.select_set(False)
     for c in list(ref.users_collection):
         c.objects.unlink(ref)
     coll.objects.link(ref)
