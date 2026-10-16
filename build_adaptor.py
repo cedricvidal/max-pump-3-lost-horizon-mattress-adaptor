@@ -1,9 +1,7 @@
 """Flextail Max Pump 3 -> Lost Horizon mattress adaptor.
 
-Remix of MakerWorld 2165161 "IKEA vacuum bag adapter for Flextail Max Pump 3"
-(https://makerworld.com/en/models/2165161): keeps its pump plug (collar + short
-tube pushed into the pump's port) and replaces its IKEA valve socket with a
-replica of the original Lost Horizon pump nozzle.
+A plug (collar + short tube pushed into the pump's port) on the pump side and a
+replica of the original Lost Horizon pump nozzle on the mattress side.
 
 Measurements (calipers, see pictures/):
 - Pump plug, from a Flextail nozzle attachment: 23.96 mm OD at the collar,
@@ -25,9 +23,6 @@ Black (LABEL_FONT); elsewhere Blender's thinner built-in font is used.
 
 Printed mattress tip down, pump plug up: no supports needed.
 
-The original model is not redistributed here. To overlay it for comparison,
-download its STL into source/; the reference import is skipped otherwise.
-
 Run inside Blender (via the Blender MCP or `blender -b -P build_adaptor.py`).
 All dimensions in mm; 1 Blender unit = 1 mm.
 """
@@ -39,7 +34,6 @@ import bpy
 from mathutils import Matrix
 
 ROOT = globals().get("ROOT") or os.path.dirname(os.path.abspath(__file__))
-REFERENCE_STL = os.path.join(ROOT, "source", "Ikea Vacuum Bag adapter for Flextail.stl")
 OUT_STL = os.path.join(ROOT, "out", "max-pump-3_lost-horizon_adaptor.stl")
 OUT_BLEND = os.path.join(ROOT, "max-pump-3-lost-horizon-adaptor.blend")
 OUT_FIT_TEST = os.path.join(ROOT, "out", "fit-test")
@@ -85,7 +79,7 @@ STOP_H = 3.5
 CONE_H = 8.0
 CONE_WALL = 2.0
 
-# Pump collar and plug (top), collar as on the IKEA adapter, plug measured.
+# Pump collar and plug (top).
 COLLAR_OD = 28.0
 COLLAR_H = 2.0
 PLUG_OD_BASE = 23.96
@@ -188,28 +182,6 @@ def setup_scene():
     units.system = "METRIC"
     units.scale_length = 0.001
     units.length_unit = "MILLIMETERS"
-
-
-def import_reference():
-    old = bpy.data.collections.get("Reference")
-    if old:
-        for obj in list(old.objects):
-            bpy.data.objects.remove(obj, do_unlink=True)
-        bpy.data.collections.remove(old)
-    if not os.path.exists(REFERENCE_STL):
-        return None
-    coll = collection("Reference", hide=True)
-    bpy.ops.wm.stl_import(filepath=REFERENCE_STL)
-    ref = bpy.context.selected_objects[0]
-    ref.name = "Reference_IKEA_Adapter"
-    # Deselect now: once hidden, select_all() can't reach it and it would be exported.
-    ref.select_set(False)
-    # Align its pump collar (z=48 in the original) with ours.
-    ref.location.z = heights()[2] - 48.0
-    for c in list(ref.users_collection):
-        c.objects.unlink(ref)
-    coll.objects.link(ref)
-    return ref
 
 
 def revolve(name, outline, coll_name):
@@ -435,7 +407,6 @@ def export_stl(obj, path):
 
 
 setup_scene()
-import_reference()
 adaptor = revolve("Adaptor", profile(), "Adaptor")
 result = verify(adaptor)
 add_labels(adaptor)

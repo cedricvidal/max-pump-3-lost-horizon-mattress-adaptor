@@ -80,6 +80,4 @@ The labels use macOS's Arial Black. Elsewhere, Blender's thinner built-in font i
 
 ## Credit
 
-Inspired by [MakerWorld 2165161](https://makerworld.com/en/models/2165161), "IKEA vacuum bag adapter for Flextail Max Pump 3", which is where the idea of a plug-in adaptor and the 28 mm collar came from. No geometry is reused: every exported surface is built by the script from the measurements above. That model is not redistributed here. To overlay it for comparison, download its STL into `source/`; the reference import is skipped when it's absent.
-
 Designed with the GitHub Copilot app running Claude Opus 5.5, driving Blender through the Blender MCP server.
