@@ -45,8 +45,9 @@ OUT_BLEND = os.path.join(ROOT, "max-pump-3-lost-horizon-adaptor.blend")
 OUT_FIT_TEST = os.path.join(ROOT, "out", "fit-test")
 
 # Diameter offsets applied to the press-fit parts (nozzle and plug OD).
-# Plug: test rings 0 / -0.1 / -0.2 / +0.1 / +0.2 on the pump; +0.1 fit best.
-NOZZLE_FIT_OFFSET = -0.1
+# From the fit-test rings (0 / -0.1 / -0.2 / +0.1 / +0.2) on the real parts,
+# +0.1 fit best on both the mattress valve and the pump.
+NOZZLE_FIT_OFFSET = 0.1
 PLUG_FIT_OFFSET = 0.1
 NOZZLE_TEST_OFFSETS = (0.0, -0.1, -0.2, 0.1, 0.2)
 PLUG_TEST_OFFSETS = (0.0, -0.1, -0.2, 0.1, 0.2)
