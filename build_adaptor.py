@@ -20,8 +20,7 @@ stop ring / collar edge where it doesn't touch the valve or the pump:
 narrow notches = smaller than measured, wide notches = larger, none = 0.0.
 
 Labels are engraved 0.5 mm deep and generated from the tip diameters, so they
-always match the print: "MAX PUMP 3" / "<plug tip> MM" on the cone below the
-collar, "LOST HORIZON <nozzle tip>" on the stop ring. They use macOS's Arial
+always match the print: "MAX PUMP 3 <plug tip> MM" around the top of the cone, "LOST HORIZON <nozzle tip>" on the stop ring. They use macOS's Arial
 Black (LABEL_FONT); elsewhere Blender's thinner built-in font is used.
 
 Printed mattress tip down, pump plug up: no supports needed.
@@ -62,8 +61,9 @@ ENGRAVE_DEPTH = 0.5
 # A heavy font so engraved strokes are wide enough to print; falls back to
 # Blender's built-in font if it isn't installed.
 LABEL_FONT = "/System/Library/Fonts/Supplemental/Arial Black.ttf"
-PUMP_LABEL_H = 2.8      # cap height of each of the 2 lines on the cone
-PUMP_LABEL_GAP = 0.8    # between the 2 lines, and below the collar
+PUMP_LABEL_H = 2.8      # cap height, on the cone just below the collar
+PUMP_LABEL_GAP = 0.8    # between the label and the collar
+MAX_LABEL_SPAN = 300.0  # degrees; leaves a gap so a label never runs into itself
 MATTRESS_LABEL_H = 2.6  # cap height, on the side of the stop ring
 
 # Mattress nozzle (bottom, tip on the bed), measured on the original pump.
@@ -317,8 +317,9 @@ def engrave(obj, body, cap_height, z_bottom, radius_at, angle=0.0):
     overshoot = 0.5
     r_ref = radius_at(z_bottom + cap_height / 2)
     width = max(v.co.x for v in bm.verts) - min(v.co.x for v in bm.verts)
-    assert width < math.pi * r_ref, f"label {body!r} too long to fit half way round"
-    LABEL_SPANS[body] = round(math.degrees(width / r_ref))
+    span = math.degrees(width / r_ref)
+    assert span <= MAX_LABEL_SPAN, f"label {body!r} wraps {span:.0f} deg, more than {MAX_LABEL_SPAN:.0f}"
+    LABEL_SPANS[body] = round(span)
     for v in bm.verts:
         x, y, t = v.co
         z = z_bottom + y
@@ -331,19 +332,14 @@ def engrave(obj, body, cap_height, z_bottom, radius_at, angle=0.0):
 
 
 def add_labels(obj):
-    """Pump label in 2 lines on the cone below the collar, mattress label on the
-    side of the stop ring, all centred on +X."""
+    """Pump label around the top of the cone, mattress label on the side of the
+    stop ring, both centred on +X."""
     z_nozzle_top, z_stop_top, z_collar, _, _ = heights()
     slope = (STOP_OD - COLLAR_OD) / 2 / CONE_H
     cone_radius = lambda z: STOP_OD / 2 - (z - z_stop_top) * slope
 
-    pump_lines = ("MAX PUMP 3", f"{PLUG_OD_TIP + PLUG_FIT_OFFSET:.2f} MM")
-    z = z_collar - PUMP_LABEL_GAP
-    for line in pump_lines:
-        z -= PUMP_LABEL_H
-        engrave(obj, line, PUMP_LABEL_H, z, cone_radius)
-        z -= PUMP_LABEL_GAP
-    assert z + PUMP_LABEL_GAP >= z_stop_top, "pump label doesn't fit on the cone"
+    pump = f"MAX PUMP 3 {PLUG_OD_TIP + PLUG_FIT_OFFSET:.2f} MM"
+    engrave(obj, pump, PUMP_LABEL_H, z_collar - PUMP_LABEL_GAP - PUMP_LABEL_H, cone_radius)
 
     mattress = f"LOST HORIZON {NOZZLE_OD_TIP + NOZZLE_FIT_OFFSET:.2f}"
     margin = (STOP_H - MATTRESS_LABEL_H) / 2
