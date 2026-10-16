@@ -11,12 +11,13 @@ Measurements (calipers, see pictures/):
 - Mattress nozzle, from the original Lost Horizon pump: 33.25 mm OD at the
   shoulder, 33.00 mm at the tip, 8.70 mm long.
 
-FIT_OFFSET shrinks both press-fit diameters (nozzle and plug) to allow for FDM
-parts printing slightly oversize; the measured values above stay untouched.
-Fit-test rings at FIT_TEST_OFFSETS are exported to out/fit-test/ to pick the
-best offset with a quick print before printing the full adaptor. Each ring is
-marked with one notch per 0.1 mm of offset (none for 0.0), cut into the stop
-ring / collar edge where it doesn't touch the valve or the pump.
+NOZZLE_FIT_OFFSET and PLUG_FIT_OFFSET adjust each press-fit diameter to allow
+for how FDM parts actually print; the measured values above stay untouched.
+Fit-test rings at NOZZLE_TEST_OFFSETS / PLUG_TEST_OFFSETS are exported to
+out/fit-test/ to pick each offset with a quick print before printing the full
+adaptor. Each ring is marked with one notch per 0.1 mm of offset, cut into the
+stop ring / collar edge where it doesn't touch the valve or the pump:
+narrow notches = smaller than measured, wide notches = larger, none = 0.0.
 
 Printed mattress tip down, pump plug up: no supports needed.
 
@@ -39,12 +40,17 @@ OUT_STL = os.path.join(ROOT, "out", "max-pump-3_lost-horizon_adaptor.stl")
 OUT_BLEND = os.path.join(ROOT, "max-pump-3-lost-horizon-adaptor.blend")
 OUT_FIT_TEST = os.path.join(ROOT, "out", "fit-test")
 
-# Diameter offset applied to the press-fit parts (nozzle and plug OD).
-FIT_OFFSET = -0.1
-FIT_TEST_OFFSETS = (0.0, -0.1, -0.2)
-NOTCH_WIDTH = 1.5
+# Diameter offsets applied to the press-fit parts (nozzle and plug OD).
+# Plug: the 0.0 test ring fit best of 0 / -0.1 / -0.2, but loosely.
+NOZZLE_FIT_OFFSET = -0.1
+PLUG_FIT_OFFSET = 0.0
+NOZZLE_TEST_OFFSETS = (0.0, -0.1, -0.2)
+PLUG_TEST_OFFSETS = (0.0, -0.1, -0.2, 0.1, 0.2)
+
+# Fit-test marks: (width mm, spacing deg) for smaller / larger than measured.
+NOTCH_NARROW = (1.5, 15.0)
+NOTCH_WIDE = (3.5, 30.0)
 NOTCH_DEPTH = 0.8
-NOTCH_SPACING = 15.0  # degrees between notches
 
 # Mattress nozzle (bottom, tip on the bed), measured on the original pump.
 NOZZLE_OD_TIP = 33.00
@@ -112,17 +118,17 @@ def bore_outline():
     return [(PLUG_ID / 2, z_plug), (r_collar, z_collar), (NOZZLE_ID / 2, z_meet)]
 
 
-def profile(fit=FIT_OFFSET):
+def profile(nozzle_fit=NOZZLE_FIT_OFFSET, plug_fit=PLUG_FIT_OFFSET):
     """Closed half-section (r, z) outline of the adaptor, counter-clockwise."""
     z_nozzle_top, z_stop_top, z_collar, z_plug, z_top = heights()
     return [
         (NOZZLE_ID / 2, 0.0),
-        *nozzle_outline(fit),
+        *nozzle_outline(nozzle_fit),
         (STOP_OD / 2, z_nozzle_top),
         (STOP_OD / 2, z_stop_top),
         (COLLAR_OD / 2, z_collar),
         (COLLAR_OD / 2, z_plug),
-        *plug_outline(fit, z_plug),
+        *plug_outline(plug_fit, z_plug),
         (PLUG_ID / 2, z_top),
         *bore_outline(),
     ]
@@ -211,18 +217,21 @@ def revolve(name, outline, coll_name):
     return obj
 
 
-def cut_notches(obj, count, radius, z0, z1):
-    """Cut `count` vertical notches into the outer face at `radius` between z0 and z1."""
+def cut_notches(obj, fit, radius, z0, z1):
+    """Mark `obj` with one vertical notch per 0.1 mm of `fit` in the outer face at
+    `radius` between z0 and z1: narrow if fit < 0, wide if fit > 0."""
+    count = round(abs(fit) * 10)
     if count == 0:
         return
+    width, spacing = NOTCH_WIDE if fit > 0 else NOTCH_NARROW
     bm = bmesh.new()
     height = z1 - z0 + 2.0  # overshoot both ends for a clean cut
     for k in range(count):
-        angle = math.radians(NOTCH_SPACING * (k - (count - 1) / 2))
+        angle = math.radians(spacing * (k - (count - 1) / 2))
         matrix = (
             Matrix.Rotation(angle, 4, "Z")
             @ Matrix.Translation((radius, 0.0, (z0 + z1) / 2))
-            @ Matrix.Diagonal((2 * NOTCH_DEPTH, NOTCH_WIDTH, height, 1.0))
+            @ Matrix.Diagonal((2 * NOTCH_DEPTH, width, height, 1.0))
         )
         bmesh.ops.create_cube(bm, size=1.0, matrix=matrix)
     cutter_mesh = bpy.data.meshes.new(obj.name + "_notches")
@@ -246,18 +255,18 @@ def cut_notches(obj, count, radius, z0, z1):
 
 
 def build_fit_tests():
-    """One nozzle ring and one plug ring per offset, laid out in a row."""
+    """Nozzle rings and plug rings per test offset, laid out in two rows."""
+    z_stop_top = NOZZLE_H + STOP_H
+    kinds = (
+        ("nozzle", nozzle_test_profile, NOZZLE_TEST_OFFSETS, 0.0, (STOP_OD / 2, z_stop_top - 2.0, z_stop_top)),
+        ("plug", plug_test_profile, PLUG_TEST_OFFSETS, 40.0, (COLLAR_OD / 2, 0.0, COLLAR_H)),
+    )
     tests = []
-    for i, fit in enumerate(FIT_TEST_OFFSETS):
-        notches = round(-fit * 10)
-        for kind, outline, y in (("nozzle", nozzle_test_profile, 0.0), ("plug", plug_test_profile, 40.0)):
+    for kind, outline, offsets, y, notch_at in kinds:
+        for i, fit in enumerate(offsets):
             obj = revolve(f"fit-test_{kind}_{fit:+.2f}", outline(fit), "FitTest")
             obj.location = (0.0, 0.0, 0.0)
-            if kind == "nozzle":
-                z_top = NOZZLE_H + STOP_H
-                cut_notches(obj, notches, STOP_OD / 2, z_top - 2.0, z_top)
-            else:
-                cut_notches(obj, notches, COLLAR_OD / 2, 0.0, COLLAR_H)
+            cut_notches(obj, fit, *notch_at)
             obj.location = (60.0 + 40.0 * i, y, 0.0)
             tests.append(obj)
     return tests
