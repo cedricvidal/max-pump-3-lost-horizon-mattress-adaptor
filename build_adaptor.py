@@ -48,7 +48,7 @@ OUT_FIT_TEST = os.path.join(ROOT, "out", "fit-test")
 # Plug: test rings 0 / -0.1 / -0.2 / +0.1 / +0.2 on the pump; +0.1 fit best.
 NOZZLE_FIT_OFFSET = -0.1
 PLUG_FIT_OFFSET = 0.1
-NOZZLE_TEST_OFFSETS = (0.0, -0.1, -0.2)
+NOZZLE_TEST_OFFSETS = (0.0, -0.1, -0.2, 0.1, 0.2)
 PLUG_TEST_OFFSETS = (0.0, -0.1, -0.2, 0.1, 0.2)
 
 # Fit-test marks: (width mm, spacing deg) for smaller / larger than measured.
