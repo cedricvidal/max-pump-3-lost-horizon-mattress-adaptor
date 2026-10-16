@@ -53,9 +53,10 @@ NOZZLE_CHAMFER = 0.5
 STOP_OD = 35.0
 STOP_H = 3.5
 
-# Cone from the stop ring to the pump collar.
+# Cone from the stop ring to the pump collar. The bore follows it with a
+# constant wall (measured square to the surface) to save material.
 CONE_H = 8.0
-BORE_CONE_H = 10.0  # inner bore narrows from NOZZLE_ID to PLUG_ID over this height
+CONE_WALL = 2.0
 
 # Pump collar and plug (top), collar as on the IKEA adapter, plug measured.
 COLLAR_OD = 28.0
@@ -93,6 +94,18 @@ def plug_outline(fit, z_plug):
     return [(r_base, z_plug), (r_chamfer, z_top - PLUG_CHAMFER), (r_tip - PLUG_CHAMFER, z_top)]
 
 
+def bore_outline():
+    """Inner bore from the collar top down to the nozzle bore, following the cone."""
+    _, z_stop_top, z_collar, z_plug, _ = heights()
+    slope = (STOP_OD - COLLAR_OD) / 2 / CONE_H  # radial change per mm of height
+    offset = CONE_WALL * math.sqrt(1 + slope**2)  # horizontal offset for a square wall
+    r_collar = COLLAR_OD / 2 - offset
+    z_meet = z_stop_top + (STOP_OD / 2 - offset - NOZZLE_ID / 2) / slope
+    assert z_stop_top <= z_meet <= z_collar, "nozzle bore must meet the cone bore"
+    assert r_collar - PLUG_ID / 2 <= COLLAR_H, "collar bore chamfer steeper than 45 deg"
+    return [(PLUG_ID / 2, z_plug), (r_collar, z_collar), (NOZZLE_ID / 2, z_meet)]
+
+
 def profile(fit=FIT_OFFSET):
     """Closed half-section (r, z) outline of the adaptor, counter-clockwise."""
     z_nozzle_top, z_stop_top, z_collar, z_plug, z_top = heights()
@@ -105,8 +118,7 @@ def profile(fit=FIT_OFFSET):
         (COLLAR_OD / 2, z_plug),
         *plug_outline(fit, z_plug),
         (PLUG_ID / 2, z_top),
-        (PLUG_ID / 2, z_nozzle_top + BORE_CONE_H),
-        (NOZZLE_ID / 2, z_nozzle_top),
+        *bore_outline(),
     ]
 
 
@@ -208,6 +220,7 @@ def verify(obj):
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     non_manifold = sum(1 for e in bm.edges if not e.is_manifold)
+    volume = bm.calc_volume()
     bm.free()
 
     def diameter_at(z, outer=True, below=math.inf):
@@ -217,10 +230,11 @@ def verify(obj):
 
     co = [v.co for v in obj.data.vertices]
     size = [max(c[i] for c in co) - min(c[i] for c in co) for i in range(3)]
-    z_nozzle_top, z_stop_top, _, z_plug, z_top = heights()
+    z_nozzle_top, z_stop_top, z_collar, z_plug, z_top = heights()
     return {
         "dimensions": [round(d, 3) for d in size],
         "non_manifold_edges": non_manifold,
+        "volume_cm3": round(volume / 1000, 2),
         "nozzle_od_above_chamfer": diameter_at(NOZZLE_CHAMFER),
         "nozzle_od_base": diameter_at(z_nozzle_top, below=STOP_OD / 2 - 0.01),
         "nozzle_id": diameter_at(0.0, outer=False),
@@ -228,6 +242,7 @@ def verify(obj):
         "plug_od_base": diameter_at(z_plug, below=COLLAR_OD / 2 - 0.01),
         "plug_od_below_chamfer": diameter_at(z_top - PLUG_CHAMFER),
         "plug_id": diameter_at(z_top, outer=False),
+        "bore_at_collar": diameter_at(z_collar, outer=False),
     }
 
 
