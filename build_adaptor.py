@@ -19,6 +19,11 @@ adaptor. Each ring is marked with one notch per 0.1 mm of offset, cut into the
 stop ring / collar edge where it doesn't touch the valve or the pump:
 narrow notches = smaller than measured, wide notches = larger, none = 0.0.
 
+Labels are engraved 0.5 mm deep and generated from the tip diameters, so they
+always match the print: "MAX PUMP 3" / "<plug tip> MM" on the cone below the
+collar, "LOST HORIZON <nozzle tip>" on the stop ring. They use macOS's Arial
+Black (LABEL_FONT); elsewhere Blender's thinner built-in font is used.
+
 Printed mattress tip down, pump plug up: no supports needed.
 
 The original model is not redistributed here. To overlay it for comparison,
@@ -51,6 +56,15 @@ PLUG_TEST_OFFSETS = (0.0, -0.1, -0.2, 0.1, 0.2)
 NOTCH_NARROW = (1.5, 15.0)
 NOTCH_WIDE = (3.5, 30.0)
 NOTCH_DEPTH = 0.8
+
+# Engraved labels, derived from the tip diameters so they match the print.
+ENGRAVE_DEPTH = 0.5
+# A heavy font so engraved strokes are wide enough to print; falls back to
+# Blender's built-in font if it isn't installed.
+LABEL_FONT = "/System/Library/Fonts/Supplemental/Arial Black.ttf"
+PUMP_LABEL_H = 2.8      # cap height of each of the 2 lines on the cone
+PUMP_LABEL_GAP = 0.8    # between the 2 lines, and below the collar
+MATTRESS_LABEL_H = 2.6  # cap height, on the side of the stop ring
 
 # Mattress nozzle (bottom, tip on the bed), measured on the original pump.
 NOZZLE_OD_TIP = 33.00
@@ -234,15 +248,21 @@ def cut_notches(obj, fit, radius, z0, z1):
             @ Matrix.Diagonal((2 * NOTCH_DEPTH, width, height, 1.0))
         )
         bmesh.ops.create_cube(bm, size=1.0, matrix=matrix)
-    cutter_mesh = bpy.data.meshes.new(obj.name + "_notches")
-    bm.to_mesh(cutter_mesh)
-    bm.free()
+    subtract(obj, bm)
+
+
+def subtract(obj, cutter_bm):
+    """Boolean-subtract the geometry in `cutter_bm` from `obj` and apply it."""
+    cutter_mesh = bpy.data.meshes.new(obj.name + "_cutter")
+    cutter_bm.to_mesh(cutter_mesh)
+    cutter_bm.free()
     cutter = bpy.data.objects.new(cutter_mesh.name, cutter_mesh)
     bpy.context.scene.collection.objects.link(cutter)
 
-    boolean = obj.modifiers.new("notches", "BOOLEAN")
+    boolean = obj.modifiers.new("cut", "BOOLEAN")
     boolean.operation = "DIFFERENCE"
     boolean.solver = "EXACT"
+    boolean.use_self = True  # font glyphs can overlap themselves (e.g. Arial Black)
     boolean.object = cutter
     depsgraph = bpy.context.evaluated_depsgraph_get()
     old_mesh = obj.data
@@ -252,6 +272,82 @@ def cut_notches(obj, fit, radius, z0, z1):
     bpy.data.meshes.remove(cutter_mesh)
     bpy.data.meshes.remove(old_mesh)
     obj.data.name = obj.name
+
+
+def text_solid(body, cap_height):
+    """Text as a closed triangulated bmesh: x along the text (centred), y up from
+    the baseline (cap height = `cap_height`), z from -1 to 1 through its thickness."""
+    curve = bpy.data.curves.new("label", "FONT")
+    curve.body = body
+    curve.align_x = "CENTER"
+    curve.extrude = 1.0
+    curve.resolution_u = 4
+    if os.path.exists(LABEL_FONT):
+        curve.font = bpy.data.fonts.load(LABEL_FONT, check_existing=True)
+    text = bpy.data.objects.new("label", curve)
+    bpy.context.scene.collection.objects.link(text)
+    mesh = bpy.data.meshes.new_from_object(text.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    bpy.data.objects.remove(text, do_unlink=True)
+    bpy.data.curves.remove(curve)
+
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bpy.data.meshes.remove(mesh)
+    # Font conversion leaves caps and side walls unwelded; the boolean needs a closed solid.
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    assert all(e.is_manifold for e in bm.edges), f"label {body!r} is not a closed solid"
+    ys = [v.co.y for v in bm.verts]
+    scale = cap_height / (max(ys) - min(ys))  # all caps: glyph extent = cap height
+    y0 = min(ys)
+    for v in bm.verts:
+        v.co.x *= scale
+        v.co.y = (v.co.y - y0) * scale
+    return bm
+
+
+LABEL_SPANS = {}  # label -> degrees of the circumference it covers
+
+
+def engrave(obj, body, cap_height, z_bottom, radius_at, angle=0.0):
+    """Engrave `body` ENGRAVE_DEPTH deep into the outer surface of `obj`, wrapped
+    around the z axis, letters upright, centred on `angle` (radians from +X).
+    `radius_at(z)` gives the outer surface radius at height z."""
+    bm = text_solid(body, cap_height)
+    overshoot = 0.5
+    r_ref = radius_at(z_bottom + cap_height / 2)
+    width = max(v.co.x for v in bm.verts) - min(v.co.x for v in bm.verts)
+    assert width < math.pi * r_ref, f"label {body!r} too long to fit half way round"
+    LABEL_SPANS[body] = round(math.degrees(width / r_ref))
+    for v in bm.verts:
+        x, y, t = v.co
+        z = z_bottom + y
+        r = radius_at(z) - ENGRAVE_DEPTH + (t + 1) / 2 * (ENGRAVE_DEPTH + overshoot)
+        theta = angle + x / r_ref
+        v.co = (r * math.cos(theta), r * math.sin(theta), z)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)  # some fonts come out inside-out
+    subtract(obj, bm)
+    assert len(obj.data.vertices) > 0, f"engraving {body!r} destroyed the mesh"
+
+
+def add_labels(obj):
+    """Pump label in 2 lines on the cone below the collar, mattress label on the
+    side of the stop ring, all centred on +X."""
+    z_nozzle_top, z_stop_top, z_collar, _, _ = heights()
+    slope = (STOP_OD - COLLAR_OD) / 2 / CONE_H
+    cone_radius = lambda z: STOP_OD / 2 - (z - z_stop_top) * slope
+
+    pump_lines = ("MAX PUMP 3", f"{PLUG_OD_TIP + PLUG_FIT_OFFSET:.2f} MM")
+    z = z_collar - PUMP_LABEL_GAP
+    for line in pump_lines:
+        z -= PUMP_LABEL_H
+        engrave(obj, line, PUMP_LABEL_H, z, cone_radius)
+        z -= PUMP_LABEL_GAP
+    assert z + PUMP_LABEL_GAP >= z_stop_top, "pump label doesn't fit on the cone"
+
+    mattress = f"LOST HORIZON {NOZZLE_OD_TIP + NOZZLE_FIT_OFFSET:.2f}"
+    margin = (STOP_H - MATTRESS_LABEL_H) / 2
+    engrave(obj, mattress, MATTRESS_LABEL_H, z_nozzle_top + margin, lambda z: STOP_OD / 2)
 
 
 def build_fit_tests():
@@ -317,6 +413,8 @@ setup_scene()
 import_reference()
 adaptor = revolve("Adaptor", profile(), "Adaptor")
 result = verify(adaptor)
+add_labels(adaptor)
+result["labels"] = LABEL_SPANS
 export_stl(adaptor, OUT_STL)
 for test in build_fit_tests():
     export_stl(test, os.path.join(OUT_FIT_TEST, test.name + ".stl"))
