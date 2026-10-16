@@ -20,7 +20,7 @@ stop ring / collar edge where it doesn't touch the valve or the pump:
 narrow notches = smaller than measured, wide notches = larger, none = 0.0.
 
 Labels are engraved 0.5 mm deep and generated from the tip diameters, so they
-always match the print: "MAX PUMP 3 <plug tip> MM" around the top of the cone, "LOST HORIZON <nozzle tip> MM" on the stop ring. They use macOS's Arial
+always match the print: "MAX PUMP 3 • <plug tip> MM" around the top of the cone, "LOST HORIZON • <nozzle tip> MM" on the stop ring. They use macOS's Arial
 Black (LABEL_FONT); elsewhere Blender's thinner built-in font is used.
 
 Printed mattress tip down, pump plug up: no supports needed.
@@ -367,10 +367,10 @@ def add_labels(obj):
     slope = (STOP_OD - COLLAR_OD) / 2 / CONE_H
     cone_radius = lambda z: STOP_OD / 2 - (z - z_stop_top) * slope
 
-    pump = f"MAX PUMP 3 {PLUG_OD_TIP + PLUG_FIT_OFFSET:.2f} MM"
+    pump = f"MAX PUMP 3 • {PLUG_OD_TIP + PLUG_FIT_OFFSET:.2f} MM"
     engrave(obj, pump, PUMP_LABEL_H, z_collar - PUMP_LABEL_GAP - PUMP_LABEL_H, cone_radius)
 
-    mattress = f"LOST HORIZON {NOZZLE_OD_TIP + NOZZLE_FIT_OFFSET:.2f} MM"
+    mattress = f"LOST HORIZON • {NOZZLE_OD_TIP + NOZZLE_FIT_OFFSET:.2f} MM"
     margin = (STOP_H - MATTRESS_LABEL_H) / 2
     engrave(obj, mattress, MATTRESS_LABEL_H, z_nozzle_top + margin, lambda z: STOP_OD / 2)
 
