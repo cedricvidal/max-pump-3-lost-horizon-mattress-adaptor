@@ -3,3 +3,6 @@ source/
 
 # Blender backups
 *.blend1
+
+# macOS Finder metadata
+.DS_Store
