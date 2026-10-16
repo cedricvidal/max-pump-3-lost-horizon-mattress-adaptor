@@ -14,7 +14,9 @@ Measurements (calipers, see pictures/):
 FIT_OFFSET shrinks both press-fit diameters (nozzle and plug) to allow for FDM
 parts printing slightly oversize; the measured values above stay untouched.
 Fit-test rings at FIT_TEST_OFFSETS are exported to out/fit-test/ to pick the
-best offset with a quick print before printing the full adaptor.
+best offset with a quick print before printing the full adaptor. Each ring is
+marked with one notch per 0.1 mm of offset (none for 0.0), cut into the stop
+ring / collar edge where it doesn't touch the valve or the pump.
 
 Printed mattress tip down, pump plug up: no supports needed.
 
@@ -29,6 +31,7 @@ import os
 
 import bmesh
 import bpy
+from mathutils import Matrix
 
 ROOT = globals().get("ROOT") or os.path.dirname(os.path.abspath(__file__))
 REFERENCE_STL = os.path.join(ROOT, "source", "Ikea Vacuum Bag adapter for Flextail.stl")
@@ -39,6 +42,9 @@ OUT_FIT_TEST = os.path.join(ROOT, "out", "fit-test")
 # Diameter offset applied to the press-fit parts (nozzle and plug OD).
 FIT_OFFSET = -0.1
 FIT_TEST_OFFSETS = (0.0, -0.1, -0.2)
+NOTCH_WIDTH = 1.5
+NOTCH_DEPTH = 0.8
+NOTCH_SPACING = 15.0  # degrees between notches
 
 # Mattress nozzle (bottom, tip on the bed), measured on the original pump.
 NOZZLE_OD_TIP = 33.00
@@ -205,12 +211,53 @@ def revolve(name, outline, coll_name):
     return obj
 
 
+def cut_notches(obj, count, radius, z0, z1):
+    """Cut `count` vertical notches into the outer face at `radius` between z0 and z1."""
+    if count == 0:
+        return
+    bm = bmesh.new()
+    height = z1 - z0 + 2.0  # overshoot both ends for a clean cut
+    for k in range(count):
+        angle = math.radians(NOTCH_SPACING * (k - (count - 1) / 2))
+        matrix = (
+            Matrix.Rotation(angle, 4, "Z")
+            @ Matrix.Translation((radius, 0.0, (z0 + z1) / 2))
+            @ Matrix.Diagonal((2 * NOTCH_DEPTH, NOTCH_WIDTH, height, 1.0))
+        )
+        bmesh.ops.create_cube(bm, size=1.0, matrix=matrix)
+    cutter_mesh = bpy.data.meshes.new(obj.name + "_notches")
+    bm.to_mesh(cutter_mesh)
+    bm.free()
+    cutter = bpy.data.objects.new(cutter_mesh.name, cutter_mesh)
+    bpy.context.scene.collection.objects.link(cutter)
+
+    boolean = obj.modifiers.new("notches", "BOOLEAN")
+    boolean.operation = "DIFFERENCE"
+    boolean.solver = "EXACT"
+    boolean.object = cutter
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    old_mesh = obj.data
+    obj.data = bpy.data.meshes.new_from_object(obj.evaluated_get(depsgraph))
+    obj.modifiers.remove(boolean)
+    bpy.data.objects.remove(cutter, do_unlink=True)
+    bpy.data.meshes.remove(cutter_mesh)
+    bpy.data.meshes.remove(old_mesh)
+    obj.data.name = obj.name
+
+
 def build_fit_tests():
     """One nozzle ring and one plug ring per offset, laid out in a row."""
     tests = []
     for i, fit in enumerate(FIT_TEST_OFFSETS):
+        notches = round(-fit * 10)
         for kind, outline, y in (("nozzle", nozzle_test_profile, 0.0), ("plug", plug_test_profile, 40.0)):
             obj = revolve(f"fit-test_{kind}_{fit:+.2f}", outline(fit), "FitTest")
+            obj.location = (0.0, 0.0, 0.0)
+            if kind == "nozzle":
+                z_top = NOZZLE_H + STOP_H
+                cut_notches(obj, notches, STOP_OD / 2, z_top - 2.0, z_top)
+            else:
+                cut_notches(obj, notches, COLLAR_OD / 2, 0.0, COLLAR_H)
             obj.location = (60.0 + 40.0 * i, y, 0.0)
             tests.append(obj)
     return tests
