@@ -78,6 +78,10 @@ The labels use macOS's Arial Black. Elsewhere, Blender's thinner built-in font i
 | `pictures/` | caliper measurements of both originals |
 | `final/` | photos and a video of the printed part |
 
+## License
+
+[Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/) (CC BY 4.0), the same license as the MakerWorld listing. Use it, change it, print and sell it; just credit Cedric Vidal. Full text in [LICENSE](LICENSE).
+
 ## Credit
 
 Designed with the GitHub Copilot app running Claude Opus 5.5, driving Blender through the Blender MCP server.
