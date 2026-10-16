@@ -1,14 +1,22 @@
 """Flextail Max Pump 3 -> Lost Horizon mattress adaptor.
 
 Remix of MakerWorld 2165161 "IKEA vacuum bag adapter for Flextail Max Pump 3"
-(https://makerworld.com/en/models/2165161): keeps its pump-side socket and
-replaces the IKEA nozzle with a replica of the original Lost Horizon pump
-nozzle (see original-*.jpeg).
+(https://makerworld.com/en/models/2165161): keeps its pump plug (collar + short
+tube pushed into the pump's port) and replaces its IKEA valve socket with a
+replica of the original Lost Horizon pump nozzle.
+
+Measurements (calipers, see pictures/):
+- Pump plug, from a Flextail nozzle attachment: 23.96 mm OD at the collar,
+  23.85 mm at the tip, sticking out 3.70 mm past the collar.
+- Mattress nozzle, from the original Lost Horizon pump: 33.25 mm OD at the
+  shoulder, 33.00 mm at the tip, 8.70 mm long.
+
+Printed mattress tip down, pump plug up: no supports, no overhang over 45 deg.
 
 The original model is not redistributed here. To overlay it for comparison,
 download its STL into source/; the reference import is skipped otherwise.
 
-Run inside Blender (via the Blender MCP or `blender -P build_adaptor.py`).
+Run inside Blender (via the Blender MCP or `blender -b -P build_adaptor.py`).
 All dimensions in mm; 1 Blender unit = 1 mm.
 """
 import math
@@ -22,42 +30,66 @@ REFERENCE_STL = os.path.join(ROOT, "source", "Ikea Vacuum Bag adapter for Flexta
 OUT_STL = os.path.join(ROOT, "out", "max-pump-3_lost-horizon_adaptor.stl")
 OUT_BLEND = os.path.join(ROOT, "max-pump-3-lost-horizon-adaptor.blend")
 
-# Pump socket, measured from the original STL.
-SOCKET_OD = 42.0
-SOCKET_ID = 35.7
-SOCKET_H = 10.0
-
-# Transition cone; its flare is the insertion stop.
-CONE_H = 10.0
-
-# Mattress nozzle, measured on the original pump.
-NOZZLE_OD_BASE = 33.25
+# Mattress nozzle (bottom, tip on the bed), measured on the original pump.
 NOZZLE_OD_TIP = 33.00
+NOZZLE_OD_BASE = 33.25
 NOZZLE_ID = 29.0
 NOZZLE_H = 8.7
-TIP_CHAMFER = 0.5
+NOZZLE_CHAMFER = 0.5
+
+# Shoulder flange: stops the nozzle in the valve. Its underside is a 45 deg
+# flare so it prints without supports.
+FLANGE_OD = 38.0
+FLANGE_H = 2.0
+
+# Cone from the flange down to the pump collar.
+CONE_H = 8.0
+BORE_CONE_H = 10.0  # inner bore narrows from NOZZLE_ID to PLUG_ID over this height
+
+# Pump collar and plug (top), collar as on the IKEA adapter, plug measured.
+COLLAR_OD = 28.0
+COLLAR_H = 2.0
+PLUG_OD_BASE = 23.96
+PLUG_OD_TIP = 23.85
+PLUG_ID = 20.0
+PLUG_H = 3.7
+PLUG_CHAMFER = 0.3
 
 SEGMENTS = 128
 
 
+def heights():
+    z_nozzle_top = NOZZLE_H
+    z_flare_top = z_nozzle_top + (FLANGE_OD - NOZZLE_OD_BASE) / 2  # 45 deg
+    z_flange_top = z_flare_top + FLANGE_H
+    z_collar = z_flange_top + CONE_H
+    z_plug = z_collar + COLLAR_H
+    z_top = z_plug + PLUG_H
+    return z_nozzle_top, z_flare_top, z_flange_top, z_collar, z_plug, z_top
+
+
 def profile():
     """Closed half-section (r, z) outline, counter-clockwise."""
-    z_cone = SOCKET_H
-    z_nozzle = SOCKET_H + CONE_H
-    z_tip = z_nozzle + NOZZLE_H
-    z_chamfer = z_tip - TIP_CHAMFER
-    r_base, r_tip = NOZZLE_OD_BASE / 2, NOZZLE_OD_TIP / 2
-    r_chamfer = r_base + (r_tip - r_base) * (z_chamfer - z_nozzle) / NOZZLE_H
+    z_nozzle_top, z_flare_top, z_flange_top, z_collar, z_plug, z_top = heights()
+    r_plug_base, r_plug_tip = PLUG_OD_BASE / 2, PLUG_OD_TIP / 2
+    r_plug_chamfer = r_plug_base + (r_plug_tip - r_plug_base) * (PLUG_H - PLUG_CHAMFER) / PLUG_H
+    r_nozzle_tip, r_nozzle_base = NOZZLE_OD_TIP / 2, NOZZLE_OD_BASE / 2
+    r_nozzle_chamfer = r_nozzle_tip + (r_nozzle_base - r_nozzle_tip) * NOZZLE_CHAMFER / NOZZLE_H
     return [
-        (SOCKET_ID / 2, 0.0),
-        (SOCKET_OD / 2, 0.0),
-        (SOCKET_OD / 2, z_cone),
-        (r_base, z_nozzle),
-        (r_chamfer, z_chamfer),
-        (r_tip - TIP_CHAMFER, z_tip),
-        (NOZZLE_ID / 2, z_tip),
-        (NOZZLE_ID / 2, z_nozzle),
-        (SOCKET_ID / 2, z_cone),
+        (NOZZLE_ID / 2, 0.0),
+        (r_nozzle_tip - NOZZLE_CHAMFER, 0.0),
+        (r_nozzle_chamfer, NOZZLE_CHAMFER),
+        (r_nozzle_base, z_nozzle_top),
+        (FLANGE_OD / 2, z_flare_top),
+        (FLANGE_OD / 2, z_flange_top),
+        (COLLAR_OD / 2, z_collar),
+        (COLLAR_OD / 2, z_plug),
+        (r_plug_base, z_plug),
+        (r_plug_chamfer, z_top - PLUG_CHAMFER),
+        (r_plug_tip - PLUG_CHAMFER, z_top),
+        (PLUG_ID / 2, z_top),
+        (PLUG_ID / 2, z_nozzle_top + BORE_CONE_H),
+        (NOZZLE_ID / 2, z_nozzle_top),
     ]
 
 
@@ -90,6 +122,8 @@ def import_reference():
     ref.name = "Reference_IKEA_Adapter"
     # Deselect now: once hidden, select_all() can't reach it and it would be exported.
     ref.select_set(False)
+    # Align its pump collar (z=48 in the original) with ours.
+    ref.location.z = heights()[3] - 48.0
     for c in list(ref.users_collection):
         c.objects.unlink(ref)
     coll.objects.link(ref)
@@ -125,19 +159,24 @@ def verify(obj):
     non_manifold = sum(1 for e in bm.edges if not e.is_manifold)
     bm.free()
 
-    def radius_at(z, outer=True):
+    def diameter_at(z, outer=True, below=math.inf):
         rs = [math.hypot(v.co.x, v.co.y) for v in obj.data.vertices if abs(v.co.z - z) < 1e-3]
-        return round(max(rs) if outer else min(rs), 3)
+        rs = [r for r in rs if r < below]
+        return round(2 * (max(rs) if outer else min(rs)), 3)
 
-    z_tip = SOCKET_H + CONE_H + NOZZLE_H
+    co = [v.co for v in obj.data.vertices]
+    size = [max(c[i] for c in co) - min(c[i] for c in co) for i in range(3)]
+    z_nozzle_top, _, z_flange_top, _, z_plug, z_top = heights()
     return {
-        "dimensions": [round(d, 3) for d in obj.dimensions],
+        "dimensions": [round(d, 3) for d in size],
         "non_manifold_edges": non_manifold,
-        "outer_r_socket": radius_at(0.0),
-        "inner_r_socket": radius_at(0.0, outer=False),
-        "outer_r_nozzle_base": radius_at(SOCKET_H + CONE_H),
-        "outer_r_below_chamfer": radius_at(z_tip - TIP_CHAMFER),
-        "inner_r_nozzle": radius_at(z_tip, outer=False),
+        "nozzle_od_above_chamfer": diameter_at(NOZZLE_CHAMFER),
+        "nozzle_od_base": diameter_at(z_nozzle_top),
+        "nozzle_id": diameter_at(0.0, outer=False),
+        "flange_od": diameter_at(z_flange_top),
+        "plug_od_base": diameter_at(z_plug, below=COLLAR_OD / 2 - 0.01),
+        "plug_od_below_chamfer": diameter_at(z_top - PLUG_CHAMFER),
+        "plug_id": diameter_at(z_top, outer=False),
     }
 
 
