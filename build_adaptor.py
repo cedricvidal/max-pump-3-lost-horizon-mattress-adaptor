@@ -180,6 +180,9 @@ def collection(name, hide=False):
 
 
 def setup_scene():
+    # Selection and export operators only work in Object Mode.
+    if bpy.context.view_layer.objects.active and bpy.context.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
     units = bpy.context.scene.unit_settings
     units.system = "METRIC"
     units.scale_length = 0.001
@@ -274,6 +277,31 @@ def subtract(obj, cutter_bm):
     obj.data.name = obj.name
 
 
+def orient_outward(bm):
+    """Flip any inside-out island (e.g. a glyph) so its signed volume is positive.
+    recalc_face_normals guesses wrong on some glyphs, such as Arial Black's "1"."""
+    seen = set()
+    for start in bm.faces:
+        if start in seen:
+            continue
+        island, stack = [], [start]
+        seen.add(start)
+        while stack:
+            face = stack.pop()
+            island.append(face)
+            for edge in face.edges:
+                for linked in edge.link_faces:
+                    if linked not in seen:
+                        seen.add(linked)
+                        stack.append(linked)
+        volume = sum(
+            loops[0].vert.co.dot(loops[1].vert.co.cross(loops[2].vert.co))
+            for loops in (f.loops for f in island)
+        )
+        if volume < 0:
+            bmesh.ops.reverse_faces(bm, faces=island)
+
+
 def text_solid(body, cap_height):
     """Text as a closed triangulated bmesh: x along the text (centred), y up from
     the baseline (cap height = `cap_height`), z from -1 to 1 through its thickness."""
@@ -326,7 +354,7 @@ def engrave(obj, body, cap_height, z_bottom, radius_at, angle=0.0):
         r = radius_at(z) - ENGRAVE_DEPTH + (t + 1) / 2 * (ENGRAVE_DEPTH + overshoot)
         theta = angle + x / r_ref
         v.co = (r * math.cos(theta), r * math.sin(theta), z)
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)  # some fonts come out inside-out
+    orient_outward(bm)
     subtract(obj, bm)
     assert len(obj.data.vertices) > 0, f"engraving {body!r} destroyed the mesh"
 
