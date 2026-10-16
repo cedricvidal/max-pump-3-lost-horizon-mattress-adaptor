@@ -11,7 +11,7 @@ Measurements (calipers, see pictures/):
 - Mattress nozzle, from the original Lost Horizon pump: 33.25 mm OD at the
   shoulder, 33.00 mm at the tip, 8.70 mm long.
 
-Printed mattress tip down, pump plug up: no supports, no overhang over 45 deg.
+Printed mattress tip down, pump plug up: no supports needed.
 
 The original model is not redistributed here. To overlay it for comparison,
 download its STL into source/; the reference import is skipped otherwise.
@@ -37,12 +37,13 @@ NOZZLE_ID = 29.0
 NOZZLE_H = 8.7
 NOZZLE_CHAMFER = 0.5
 
-# Shoulder flange: stops the nozzle in the valve. Its underside is a 45 deg
-# flare so it prints without supports.
-FLANGE_OD = 38.0
-FLANGE_H = 2.0
+# Stop ring behind the nozzle: thin and square like the original pump's
+# (estimated from pictures/original-*.jpeg). The ~0.9 mm underside ledge
+# prints without supports.
+STOP_OD = 35.0
+STOP_H = 3.5
 
-# Cone from the flange down to the pump collar.
+# Cone from the stop ring to the pump collar.
 CONE_H = 8.0
 BORE_CONE_H = 10.0  # inner bore narrows from NOZZLE_ID to PLUG_ID over this height
 
@@ -60,17 +61,16 @@ SEGMENTS = 128
 
 def heights():
     z_nozzle_top = NOZZLE_H
-    z_flare_top = z_nozzle_top + (FLANGE_OD - NOZZLE_OD_BASE) / 2  # 45 deg
-    z_flange_top = z_flare_top + FLANGE_H
-    z_collar = z_flange_top + CONE_H
+    z_stop_top = z_nozzle_top + STOP_H
+    z_collar = z_stop_top + CONE_H
     z_plug = z_collar + COLLAR_H
     z_top = z_plug + PLUG_H
-    return z_nozzle_top, z_flare_top, z_flange_top, z_collar, z_plug, z_top
+    return z_nozzle_top, z_stop_top, z_collar, z_plug, z_top
 
 
 def profile():
     """Closed half-section (r, z) outline, counter-clockwise."""
-    z_nozzle_top, z_flare_top, z_flange_top, z_collar, z_plug, z_top = heights()
+    z_nozzle_top, z_stop_top, z_collar, z_plug, z_top = heights()
     r_plug_base, r_plug_tip = PLUG_OD_BASE / 2, PLUG_OD_TIP / 2
     r_plug_chamfer = r_plug_base + (r_plug_tip - r_plug_base) * (PLUG_H - PLUG_CHAMFER) / PLUG_H
     r_nozzle_tip, r_nozzle_base = NOZZLE_OD_TIP / 2, NOZZLE_OD_BASE / 2
@@ -80,8 +80,8 @@ def profile():
         (r_nozzle_tip - NOZZLE_CHAMFER, 0.0),
         (r_nozzle_chamfer, NOZZLE_CHAMFER),
         (r_nozzle_base, z_nozzle_top),
-        (FLANGE_OD / 2, z_flare_top),
-        (FLANGE_OD / 2, z_flange_top),
+        (STOP_OD / 2, z_nozzle_top),
+        (STOP_OD / 2, z_stop_top),
         (COLLAR_OD / 2, z_collar),
         (COLLAR_OD / 2, z_plug),
         (r_plug_base, z_plug),
@@ -123,7 +123,7 @@ def import_reference():
     # Deselect now: once hidden, select_all() can't reach it and it would be exported.
     ref.select_set(False)
     # Align its pump collar (z=48 in the original) with ours.
-    ref.location.z = heights()[3] - 48.0
+    ref.location.z = heights()[2] - 48.0
     for c in list(ref.users_collection):
         c.objects.unlink(ref)
     coll.objects.link(ref)
@@ -166,14 +166,14 @@ def verify(obj):
 
     co = [v.co for v in obj.data.vertices]
     size = [max(c[i] for c in co) - min(c[i] for c in co) for i in range(3)]
-    z_nozzle_top, _, z_flange_top, _, z_plug, z_top = heights()
+    z_nozzle_top, z_stop_top, _, z_plug, z_top = heights()
     return {
         "dimensions": [round(d, 3) for d in size],
         "non_manifold_edges": non_manifold,
         "nozzle_od_above_chamfer": diameter_at(NOZZLE_CHAMFER),
-        "nozzle_od_base": diameter_at(z_nozzle_top),
+        "nozzle_od_base": diameter_at(z_nozzle_top, below=STOP_OD / 2 - 0.01),
         "nozzle_id": diameter_at(0.0, outer=False),
-        "flange_od": diameter_at(z_flange_top),
+        "stop_od": diameter_at(z_stop_top),
         "plug_od_base": diameter_at(z_plug, below=COLLAR_OD / 2 - 0.01),
         "plug_od_below_chamfer": diameter_at(z_top - PLUG_CHAMFER),
         "plug_id": diameter_at(z_top, outer=False),
